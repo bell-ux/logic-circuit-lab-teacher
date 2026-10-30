@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>授業状況 | 論理回路ラボ</title><link rel="stylesheet" href="style.css"></head>
+<body class="teacher-body"><header class="topbar"><span class="brand">◉ 論理回路ラボ</span><span class="teacher-label">授業担当者専用</span></header>
+<main class="page teacher-page">
+  <section id="loginScreen" class="card teacher-login"><div class="lock-icon">▣</div><p class="eyebrow">TEACHER ACCESS</p><h1>授業状況を確認</h1><p>授業担当者用の閲覧キーを入力してください。</p><form id="loginForm"><label for="teacherKey">閲覧キー</label><input id="teacherKey" type="password" autocomplete="current-password" required><button class="button primary" type="submit">認証して開く</button></form><p id="loginStatus" class="login-status" aria-live="polite"></p></section>
+  <div id="teacherDashboard" hidden>
+    <section class="hero compact"><div><p class="eyebrow">CLASS DASHBOARD</p><h1>授業の進み具合</h1><p>未実施番号、問題ごとの正答率、ヒント利用、相談を確認できます。</p></div><button id="logoutButton" class="button light">ロックする</button></section>
+    <section class="card roster-settings"><div><strong>出席番号の範囲</strong><p>クラスの最初と最後の番号を設定します。</p></div><label>最初<input id="numberStart" type="number" min="1" value="1"></label><label>最後<input id="numberEnd" type="number" min="1" value="40"></label><button id="applyRange" class="button light">反映</button><button id="refresh" class="button primary">最新の記録を読む</button></section>
+    <section class="summary-grid"><article class="card summary-card"><span>未実施の生徒</span><strong id="missingCount">—</strong><small id="missingNumbers">認証後に表示</small></article><article class="card summary-card"><span>相談</span><strong id="consultCount">—</strong><small>未回答の確認に使えます</small></article><article class="card summary-card"><span>データ更新</span><strong id="updatedAt">—</strong><small id="loadStatus">—</small></article></section>
+    <section class="card dashboard-section"><div class="section-heading"><div><p class="eyebrow">EXERCISES</p><h2>問題ごとの正答率とヒント利用</h2></div><p>正答率は、実施した生徒のうち全入力パターンを正しく完成した割合です。</p></div><div class="table-wrap"><table><thead><tr><th>問題</th><th>実施人数</th><th>正答人数</th><th>正答率</th><th>ヒントを見た人数</th></tr></thead><tbody id="problemStats"></tbody></table></div></section>
+    <section class="card dashboard-section"><div class="section-heading"><div><p class="eyebrow">QUESTIONS</p><h2>先生への相談</h2></div><p>生徒から送られた相談内容です。</p></div><div id="consultations" class="consultation-list"></div></section>
+    <p class="privacy-note">先生用ページは生徒用サイトからリンクしていません。閲覧キーは先生だけで管理してください。</p>
+  </div>
+</main><script src="teacher.js"></script></body></html>
+
