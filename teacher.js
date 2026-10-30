@@ -1,7 +1,7 @@
 // 記録は、Apps Scriptがキーを確認できた後にだけ画面へ表示します。
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzXBhfwTNkOTqxv7IntzelggV6Mk_sHjMIiglwIPBray8MbIJP0OjRvEFHyjTlWGj8u/exec';
 const $ = id => document.getElementById(id);
-const problemNames = { P1: 'AND回路', P2: 'NOT＋OR回路', P3: '4つのゲート', P4: 'NAND回路' };
+const problemNames = { P1: 'AND回路', P2: '条件に合う回路', P3: '4つのゲート', P4: 'NAND回路' };
 let records = [];
 let teacherKey = '';
 
@@ -66,6 +66,18 @@ function renderDashboard() {
     const rate = attempted.size ? Math.round(solved.size * 100 / attempted.size) : 0;
     return `<tr><th>${problemNames[id]}</th><td>${attempted.size}人</td><td>${solved.size}人</td><td><div class="rate-cell"><strong>${attempted.size ? rate + '%' : '—'}</strong><span class="rate-track"><i style="width:${rate}%"></i></span></div></td><td>${hintUsers.size}人</td></tr>`;
   }).join('');
+  const successfulRuns = records.filter(r => r.type === 'run' && (r.correct === true || r.correct === 'TRUE'));
+  const patterns = new Map();
+  successfulRuns.forEach(record => {
+    let gates = record.gates || {};
+    if (typeof gates === 'string') { try { gates = JSON.parse(gates); } catch { gates = {}; } }
+    const pattern = Object.keys(gates).sort().map(slot => `${slot}：${gates[slot]}`).join('、') || '回路情報なし';
+    const key = `${record.problem}|${pattern}`;
+    if (!patterns.has(key)) patterns.set(key, {problem:record.problem, pattern, students:new Set()});
+    patterns.get(key).students.add(String(record.studentId));
+  });
+  const answerRows = [...patterns.values()].sort((a,b) => String(a.problem).localeCompare(String(b.problem)) || a.pattern.localeCompare(b.pattern, 'ja'));
+  $('answerPatterns').innerHTML = answerRows.length ? answerRows.map(item => `<article class="consultation-item"><div class="consultation-meta"><strong>${escapeHtml(problemNames[item.problem] || item.problem)}</strong><span>${escapeHtml(item.pattern)}</span><span>${item.students.size}人</span></div></article>`).join('') : '<p class="empty-state">正解回路はまだ記録されていません。</p>';
   $('updatedAt').textContent = new Date().toLocaleTimeString('ja-JP', {hour:'2-digit',minute:'2-digit'});
   $('loadStatus').textContent = records.length + '件の記録を集計';
 }
