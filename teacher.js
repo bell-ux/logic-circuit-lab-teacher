@@ -68,6 +68,16 @@ function renderDashboard() {
   }).join('');
   const successfulRuns = records.filter(r => r.type === 'run' && (r.correct === true || r.correct === 'TRUE'));
   const patterns = new Map();
+  // 問題2の A=0、B=1 でY=1になる全10通りを先に並べます。
+  const validProblem2 = [
+    ['AND','OR'], ['AND','NOT'], ['AND','NAND'],
+    ['OR','OR'], ['OR','NOT'], ['OR','NAND'],
+    ['NOT','AND'], ['NOT','OR'], ['NAND','AND'], ['NAND','OR']
+  ];
+  validProblem2.forEach(([first,second]) => {
+    const pattern = `g1：${first}、g2：${second}`;
+    patterns.set(`P2|${pattern}`, {problem:'P2', pattern, students:new Set()});
+  });
   successfulRuns.forEach(record => {
     let gates = record.gates || {};
     if (typeof gates === 'string') { try { gates = JSON.parse(gates); } catch { gates = {}; } }
