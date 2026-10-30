@@ -26,16 +26,53 @@ function requestRecords(key) {
   });
 }
 
+function requestAuth(key) {
+  return new Promise((resolve, reject) => {
+    const callback = 'logicAuth' + Date.now();
+    const script = document.createElement('script');
+    const timer = setTimeout(() => finish(new Error('timeout')), 10000);
+    function finish(error, result) {
+      clearTimeout(timer);
+      delete window[callback];
+      script.remove();
+      if (error) reject(error); else resolve(result);
+    }
+    window[callback] = data => {
+      if (!data || data.ok !== true) finish(new Error('denied'));
+      else finish(null, true);
+    };
+    script.onerror = () => finish(new Error('network'));
+    script.src = SCRIPT_URL + '?mode=auth&key=' + encodeURIComponent(key) + '&callback=' + callback;
+    document.body.appendChild(script);
+  });
+}
+
+function showDashboardLoading() {
+  $('missingCount').textContent = '読み込み中…';
+  $('missingNumbers').textContent = '記録を取得しています';
+  $('consultCount').textContent = '読み込み中…';
+  $('updatedAt').textContent = '—';
+  $('problemStats').innerHTML = '<tr><td colspan="5">学習記録を読み込んでいます…</td></tr>';
+  $('consultations').innerHTML = '<p class="empty-state">相談を読み込んでいます…</p>';
+  $('loadStatus').textContent = '読み込み中…';
+}
+
 async function unlock(key) {
   $('loginStatus').textContent = '確認しています…';
   try {
-    const data = await requestRecords(key);
+    await requestAuth(key);
     teacherKey = key;
-    records = data;
+    records = [];
     $('loginScreen').hidden = true;
     $('teacherDashboard').hidden = false;
-    renderDashboard();
+    showDashboardLoading();
     $('loginStatus').textContent = '';
+    try {
+      records = await requestRecords(teacherKey);
+      renderDashboard();
+    } catch (error) {
+      $('loadStatus').textContent = '認証済みですが、記録を読み込めません。更新を押してください。';
+    }
   } catch (error) {
     teacherKey = '';
     records = [];
@@ -103,7 +140,7 @@ function escapeHtml(value) {
 async function refresh() {
   $('loadStatus').textContent = '読み込み中…';
   try { records = await requestRecords(teacherKey); renderDashboard(); }
-  catch (error) { $('loadStatus').textContent = '再読み込みに失敗しました。認証し直してください。'; lock(); }
+  catch (error) { $('loadStatus').textContent = '再読み込みに失敗しました。もう一度更新してください。'; }
 }
 function lock() {
   teacherKey = '';
