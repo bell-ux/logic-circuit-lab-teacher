@@ -1,7 +1,8 @@
 // 記録は、Apps Scriptがキーを確認できた後にだけ画面へ表示します。
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzXBhfwTNkOTqxv7IntzelggV6Mk_sHjMIiglwIPBray8MbIJP0OjRvEFHyjTlWGj8u/exec';
 const $ = id => document.getElementById(id);
-const problemNames = { P1: 'AND回路', P2: '条件に合う回路', P3: '4つのゲート', P4: 'NAND回路' };
+const problemNames = { P1: 'AND回路', P2: '条件に合う回路', P3: 'NAND応用回路', P4: 'NAND回路' };
+let answerSettings = {};
 let records = [];
 let teacherKey = '';
 
@@ -47,6 +48,63 @@ function requestAuth(key) {
   });
 }
 
+function requestJsonp(parameters, prefix) {
+  return new Promise((resolve, reject) => {
+    const callback = prefix + Date.now();
+    const script = document.createElement('script');
+    const timer = setTimeout(() => finish(new Error('timeout')), 10000);
+    function finish(error, data) {
+      clearTimeout(timer); delete window[callback]; script.remove();
+      if (error) reject(error); else resolve(data);
+    }
+    window[callback] = data => data && data.ok === true ? finish(null, data) : finish(new Error('denied'));
+    script.onerror = () => finish(new Error('network'));
+    script.src = SCRIPT_URL + '?' + new URLSearchParams({...parameters, callback}).toString();
+    document.body.appendChild(script);
+  });
+}
+
+async function loadAnswerSettings() {
+  $('answerPublicationStatus').textContent = '公開設定を読み込んでいます…';
+  try {
+    const data = await requestJsonp({mode:'answerSettings', key:teacherKey}, 'logicAnswerSettings');
+    if (!data.publications) throw new Error('missing settings');
+    answerSettings = data.publications;
+    renderAnswerPublicationControls();
+    $('answerPublicationStatus').textContent = '設定を読み込みました。';
+  } catch (error) {
+    $('answerPublicationControls').innerHTML = '<p class="empty-state">Apps Scriptが未更新か、公開設定を読み込めません。Code.gsを更新して再デプロイしてください。</p>';
+    $('answerPublicationStatus').textContent = '問題の答えは変更されていません。';
+  }
+}
+
+function renderAnswerPublicationControls() {
+  $('answerPublicationControls').innerHTML = Object.keys(problemNames).map(id => {
+    const isPublic = answerSettings[id] === true;
+    const action = isPublic ? 'false' : 'true';
+    const label = isPublic ? `${id.replace('P','問題')}の回答を非公開` : `${id.replace('P','問題')}の回答を公開`;
+    return `<article class="consultation-item"><div class="consultation-meta"><strong>${problemNames[id]}</strong><button class="button ${isPublic?'primary':'light'}" data-publish-answer="${id}" data-visible="${action}">${label}</button><span>${isPublic?'生徒に公開中':'非公開'}</span></div></article>`;
+  }).join('');
+  document.querySelectorAll('[data-publish-answer]').forEach(button => button.addEventListener('click', () => {
+    setAnswerPublication(button.dataset.publishAnswer, button.dataset.visible === 'true', button);
+  }));
+}
+
+async function setAnswerPublication(problem, visible, button) {
+  button.disabled = true;
+  $('answerPublicationStatus').textContent = '公開設定を保存しています…';
+  try {
+    const data = await requestJsonp({mode:'setAnswerPublication', key:teacherKey, problem, visible:String(visible)}, 'logicSetAnswer');
+    if (!data.publications) throw new Error('missing settings');
+    answerSettings = data.publications;
+    renderAnswerPublicationControls();
+    $('answerPublicationStatus').textContent = visible ? '回答を公開しました。生徒はページを再読み込みして確認できます。' : '回答を非公開にしました。';
+  } catch (error) {
+    button.disabled = false;
+    $('answerPublicationStatus').textContent = '保存できません。Apps Script の更新と再デプロイを確認してください。';
+  }
+}
+
 function showDashboardLoading() {
   $('missingCount').textContent = '読み込み中…';
   $('missingNumbers').textContent = '記録を取得しています';
@@ -70,6 +128,7 @@ async function unlock(key) {
     try {
       records = await requestRecords(teacherKey);
       renderDashboard();
+      await loadAnswerSettings();
     } catch (error) {
       $('loadStatus').textContent = '認証済みですが、記録を読み込めません。更新を押してください。';
     }
@@ -105,14 +164,12 @@ function renderDashboard() {
   }).join('');
   const successfulRuns = records.filter(r => r.type === 'run' && (r.correct === true || r.correct === 'TRUE'));
   const patterns = new Map();
-  // 問題2の A=0、B=1 でY=1になる全10通りを先に並べます。
+  // 問題2では、1入力のNOTと2入力のANDまたはORが条件を満たします。
   const validProblem2 = [
-    ['AND','OR'], ['AND','NOT'], ['AND','NAND'],
-    ['OR','OR'], ['OR','NOT'], ['OR','NAND'],
-    ['NOT','AND'], ['NOT','OR'], ['NAND','AND'], ['NAND','OR']
+    {g1:'NOT',g2:'AND'}, {g1:'NOT',g2:'OR'}
   ];
-  validProblem2.forEach(([first,second]) => {
-    const pattern = `g1：${first}、g2：${second}`;
+  validProblem2.forEach(gates => {
+    const pattern = `g1：${gates.g1}、g2：${gates.g2}`;
     patterns.set(`P2|${pattern}`, {problem:'P2', pattern, students:new Set()});
   });
   successfulRuns.forEach(record => {
@@ -137,14 +194,37 @@ function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 }
 
+
+async function resetClassData() {
+  if (!window.confirm('学習記録をすべて削除し、全問題の答えを非公開に戻します。先生用閲覧キーとシートの見出しは残ります。実行しますか？')) return;
+  const button = $('resetClassData');
+  button.disabled = true;
+  $('loadStatus').textContent = '初期化しています…';
+  try {
+    const data = await requestJsonp({mode:'resetClassData', key:teacherKey}, 'logicResetClass');
+    if (data.ok !== true) throw new Error('reset failed');
+    records = [];
+    answerSettings = data.publications || {P1:false,P2:false,P3:false,P4:false};
+    renderDashboard();
+    renderAnswerPublicationControls();
+    $('answerPublicationStatus').textContent = '全問の答えを非公開に戻しました。';
+    $('loadStatus').textContent = '授業データを初期化しました';
+  } catch (error) {
+    $('loadStatus').textContent = '初期化に失敗しました。Apps Scriptが最新版か確認してください。';
+  } finally { button.disabled = false; }
+}
+
 async function refresh() {
   $('loadStatus').textContent = '読み込み中…';
-  try { records = await requestRecords(teacherKey); renderDashboard(); }
+  try { records = await requestRecords(teacherKey); renderDashboard(); await loadAnswerSettings(); }
   catch (error) { $('loadStatus').textContent = '再読み込みに失敗しました。もう一度更新してください。'; }
 }
 function lock() {
   teacherKey = '';
   records = [];
+  answerSettings = {};
+  $('answerPublicationControls').innerHTML = '<p class="empty-state">先生キーで認証すると設定できます。</p>';
+  $('answerPublicationStatus').textContent = '';
   $('teacherDashboard').hidden = true;
   $('loginScreen').hidden = false;
   $('teacherKey').value = '';
@@ -155,4 +235,5 @@ $('loginForm').addEventListener('submit', event => { event.preventDefault(); unl
 $('refresh').addEventListener('click', refresh);
 $('logoutButton').addEventListener('click', lock);
 $('applyRange').addEventListener('click', renderDashboard);
+$('resetClassData').addEventListener('click', resetClassData);
 
